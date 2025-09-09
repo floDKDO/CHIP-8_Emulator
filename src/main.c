@@ -1,6 +1,6 @@
 #include "display.h"
 #include "stack.h"
-#include "cpu.h"
+#include "processing.h"
 #include "defs.h"
 
 #include <stdbool.h>
@@ -9,10 +9,10 @@ int main(void)
 {
     CHK(SDL_Init(SDL_INIT_EVERYTHING));
 
-    struct memory m = create_memory();
-    m = load_program_in_memory(m, "IBM Logo.ch8");
-    dump_memory(m);
-    read_instructions(m);
+    struct processing p = create_memory_and_cpu();
+    p = load_program_in_memory(p, "IBM Logo.ch8");
+    dump_memory(p);
+    read_instructions(p);
 
     struct stack s = create_stack();
 
