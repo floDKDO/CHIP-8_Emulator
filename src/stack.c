@@ -1,6 +1,7 @@
-#include "stack.h"
 #include <stdio.h>
 #include <string.h>
+
+#include "stack.h"
 
 struct stack create_stack(void)
 {

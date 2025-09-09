@@ -1,6 +1,5 @@
-#include "display.h"
 #include "stack.h"
-#include "processing.h"
+#include "chip_8.h"
 #include "defs.h"
 
 #include <stdbool.h>
@@ -9,17 +8,13 @@ int main(void)
 {
     CHK(SDL_Init(SDL_INIT_EVERYTHING));
 
-    struct processing p = create_memory_and_cpu();
-    p = load_program_in_memory(p, "IBM Logo.ch8");
-    dump_memory(p);
-    read_instructions(p);
+    struct chip_8 c = create_chip_8();
+    c = load_program_in_memory(c, "IBM Logo.ch8");
+    dump_memory(c);
+    handle_instructions(c);
 
-    struct stack s = create_stack();
-
-    struct display d = create_display();
-
-    bool quitter = false;
-    while(!quitter)
+    bool quit = false;
+    while(!quit)
     {
         SDL_Event e;
         while(SDL_PollEvent(&e))
@@ -30,7 +25,7 @@ int main(void)
 
                     if(e.window.event == SDL_WINDOWEVENT_CLOSE)
                     {
-                        quitter = true;
+                        quit = true;
                     }
                     break;
 
@@ -39,7 +34,7 @@ int main(void)
                     switch(e.key.keysym.sym)
                     {
                         case SDLK_ESCAPE:
-                            quitter = true;
+                            quit = true;
                             break;
 
                         case SDLK_1:
@@ -102,12 +97,12 @@ int main(void)
             }
         }
 
-        CHK(SDL_RenderClear(d.renderer));
-        CHK(SDL_SetRenderDrawColor(d.renderer, 255, 0, 0, 0));
-        SDL_RenderPresent(d.renderer);
+        CHK(SDL_RenderClear(c.display.renderer));
+        CHK(SDL_SetRenderDrawColor(c.display.renderer, 255, 0, 0, 0));
+        SDL_RenderPresent(c.display.renderer);
     }
 
-    destroy_display(&d);
+    destroy_chip_8(&c);
     SDL_Quit();
 	return EXIT_SUCCESS;
 }

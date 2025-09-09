@@ -356,6 +356,11 @@ tmtags
 # Local History for Visual Studio Code
 .history/
 
+##### CodeBlocks
+*.layout
+*.cbp
+*.depend
+
 ##### NetBeans
 **/nbproject/private/
 **/nbproject/Makefile-*.mk
