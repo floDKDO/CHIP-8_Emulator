@@ -97,7 +97,8 @@ int main(void)
         }
 
         CHK(SDL_RenderClear(c.display.renderer));
-        //CHK(SDL_SetRenderDrawColor(c.display.renderer, 255, 0, 0, 0));
+        //color_specific_pixel(c, 63, 31, 0xFFFFFFFF);
+        //printf("BOOL : %d\n", check_if_specific_pixel_on(c, 0, 0));
         handle_instructions(c);
         CHK(SDL_RenderCopy(c.display.renderer, c.display.texture, NULL, NULL));
         SDL_RenderPresent(c.display.renderer);

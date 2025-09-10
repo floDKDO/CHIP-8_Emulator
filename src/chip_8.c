@@ -60,13 +60,11 @@ bool check_if_specific_pixel_on(struct chip_8 c, int x, int y)
 
     Uint32* pixelsPtr = ((Uint32*)pixels);
 
-    int index = y * (pitch / sizeof(Uint32)) + x;
+    int index = y * (pitch / sizeof(Uint32)) + x; //(pitch / sizeof(Uint32)) = DISPLAY_WIDTH
 
     bool is_present = (pixelsPtr[index] != 0x00000000 && pixelsPtr[index] != 0xFF000000);
 
-    printf("IIISSSS PPPRREEESSSEEENNNTTT à l'index %d : %d\n", index, is_present);
-
-    printf("Valeur du pixel : %u\n", pixelsPtr[index]);
+    printf("Valeur de is_present (%d) pour le pixel (%08x) à l'index %d\n", is_present, pixelsPtr[index], index);
 
     SDL_UnlockTexture(c.display.texture);
 
@@ -144,8 +142,9 @@ void handle_instructions(struct chip_8 c)
 
             case 0x1:
                 {
+                    printf("(Jump)\n");
                     uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
-                    //printf("Address : %04x, ", address);
+                    printf("Address : %04x\n", address);
                     c.cpu.program_counter = &(c.memory.memory_array[START_ADDRESS + address]);
                     //printf("Adresse de PC : %p, adresse case : %p\n", c.cpu.program_counter, &(c.memory.memory_array[START_ADDRESS]));
                     program_counter_edited = true;
@@ -169,7 +168,7 @@ void handle_instructions(struct chip_8 c)
                     uint8_t value = third_nibble << 4 | fourth_nibble;
                     uint8_t index = second_nibble;
                     c.cpu.v_registers[index] = value;
-                    printf("Valeur stockée dans V%d : %d\n", index, value);
+                    printf("(Put value %d in V%d register)\n", value, index);
                 }
                 break;
 
@@ -178,7 +177,7 @@ void handle_instructions(struct chip_8 c)
                     uint8_t value = third_nibble << 4 | fourth_nibble;
                     uint8_t index = second_nibble;
                     c.cpu.v_registers[index] += value;
-                    printf("Valeur additionnée au contenu du registre V%d : %d\n", index, value);
+                    printf("(Add value %d in V%d register)\n", value, index);
                 }
                 break;
 
@@ -224,10 +223,9 @@ void handle_instructions(struct chip_8 c)
             case 0xA:
                 {
                     uint16_t value = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
-                    printf("VVVAAALLLEEEUUURRR : %u\n", value);
                     c.cpu.index_register = &(c.memory.memory_array[value]); //[value] and not [START_ADDRESS + value]
-
-                    printf("Adresse stockée dans I : %p\n", c.cpu.index_register);
+                    printf("(Store address %d in index register)\n", value);
+                    //printf("Adresse stockée dans I : %p\n", c.cpu.index_register);
                 }
                 break;
 
@@ -239,56 +237,51 @@ void handle_instructions(struct chip_8 c)
 
             case 0xD:
 
-                printf("DISPLAY\n");
+                printf("(Display)\n");
                 {
                     uint8_t register_x = second_nibble;
                     uint8_t register_y = third_nibble;
 
-                    int x_pos = c.cpu.v_registers[register_x] & 63;
-                    int y_pos = c.cpu.v_registers[register_y] & 31;
+                    int x_pos = c.cpu.v_registers[register_x] & (DISPLAY_WIDTH - 1);
+                    int y_pos = c.cpu.v_registers[register_y] & (DISPLAY_HEIGHT - 1);
 
-                    printf("xpos : %d, ypos : %d\n", x_pos, y_pos);
+                    printf("Valeur de xpos : %d et ypos : %d\n", x_pos, y_pos);
 
                     c.cpu.v_registers[0xF] = 0;
 
                     uint8_t n = fourth_nibble;
+
                     for(uint8_t y = 0; y < n; ++y)
                     {
                         uint8_t nth_byte = c.cpu.index_register[y];
-                        printf("NTH Byte : %u\n", nth_byte);
+                        printf("Valeur de nth_byte : %u\n", nth_byte);
 
-                        for(int x = 0; x < 8; ++x)
+                        for(uint8_t x = 0; x < 8; ++x)
                         {
-                            //printf("Valeur avec masque : %u\n", nth_byte & mask);
+                            int pixel_x = (x_pos + x) % DISPLAY_WIDTH;
+                            int pixel_y = (y_pos + y) % DISPLAY_HEIGHT;
+
                             if(nth_byte & (0x80 >> x))
                             {
-                                printf("Un !\n");
-                                if(check_if_specific_pixel_on(c, x_pos, y_pos))
+                                printf("Le bit %d vaut 1\n", x);
+                                if(check_if_specific_pixel_on(c, pixel_x, pixel_y))
                                 {
-                                    printf("LA! \n");
-                                    color_specific_pixel(c, x_pos, y_pos, 0xFF000000);
+                                    printf("Le pixel (%d, %d) sur l'écran était en couleur\n", pixel_x, pixel_y);
+                                    color_specific_pixel(c, pixel_x, pixel_y, 0xFF000000);
                                     c.cpu.v_registers[0xF] = 1;
                                 }
                                 else
                                 {
-                                    printf("ICI! \n");
-                                    color_specific_pixel(c, x_pos, y_pos, 0xFFFFFFFF);
+                                    printf("Le pixel (%d, %d) sur l'écran n'était pas en couleur\n", pixel_x, pixel_y);
+                                    color_specific_pixel(c, pixel_x, pixel_y, 0xFFFFFFFF);
                                     c.cpu.v_registers[0xF] = 0;
                                 }
                             }
                             else
                             {
-                                printf("Zéro ! \n");
+                                printf("Le bit %d vaut 0\n", x);
                             }
-
-                            printf("XPOS : %d\n", x_pos);
-
-                            if(x_pos > DISPLAY_WIDTH)
-                                break;
-
-                            x_pos += 1;
                         }
-                        y_pos += 1;
                     }
                 }
                 break;
