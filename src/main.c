@@ -11,7 +11,6 @@ int main(void)
     struct chip_8 c = create_chip_8();
     c = load_program_in_memory(c, "IBM Logo.ch8");
     dump_memory(c);
-    handle_instructions(c);
 
     bool quit = false;
     while(!quit)
@@ -98,8 +97,11 @@ int main(void)
         }
 
         CHK(SDL_RenderClear(c.display.renderer));
-        CHK(SDL_SetRenderDrawColor(c.display.renderer, 255, 0, 0, 0));
+        //CHK(SDL_SetRenderDrawColor(c.display.renderer, 255, 0, 0, 0));
+        handle_instructions(c);
+        CHK(SDL_RenderCopy(c.display.renderer, c.display.texture, NULL, NULL));
         SDL_RenderPresent(c.display.renderer);
+        SDL_Delay(32);
     }
 
     destroy_chip_8(&c);
