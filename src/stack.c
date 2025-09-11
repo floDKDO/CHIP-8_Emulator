@@ -16,6 +16,7 @@ struct stack push_stack(struct stack s, uint16_t address)
     if(s.actual_top < MAX_STACK_SIZE)
     {
         s.addresses[s.actual_top] = address;
+        printf("Push address %x on the stack (%d)\n", s.addresses[s.actual_top], s.actual_top);
         s.actual_top += 1;
     }
     else fprintf(stderr, "The stack is full!\n");
@@ -25,11 +26,13 @@ struct stack push_stack(struct stack s, uint16_t address)
 
 struct stack pop_stack(struct stack s, uint16_t* program_counter)
 {
+    printf("Taille actuelle : %d\n", s.actual_top);
     if(s.actual_top > 0)
     {
-        *program_counter = s.actual_top;
-        s.addresses[s.actual_top] = 0;
         s.actual_top -= 1;
+        *program_counter = s.addresses[s.actual_top];
+        printf("ACTUAL TOP : %x (%d)\n", s.addresses[s.actual_top], s.actual_top);
+        s.addresses[s.actual_top] = 0;
     }
     else fprintf(stderr, "The stack is empty!\n");
 

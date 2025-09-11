@@ -48,8 +48,12 @@ struct chip_8 create_chip_8(void)
     c.cpu.program_counter = START_ADDRESS;
     c.cpu.index_register = 0;
     memset(c.cpu.v_registers, 0, 16 * sizeof(uint8_t));
+    c.cpu.delay_timer = 0;
+    c.cpu.sound_timer = 0;
 
     c.stack = create_stack();
+
+    memset(c.is_key_pressed, 0, 16 * sizeof(bool));
 
     return c;
 }
@@ -112,6 +116,31 @@ bool check_if_specific_pixel_on(struct chip_8 c, int x, int y)
 }
 
 
+bool check_if_any_key_pressed(struct chip_8 c)
+{
+    for(int i = 0; i < 16; ++i)
+    {
+        if(c.is_key_pressed[i] == true)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+int get_pressed_key(struct chip_8 c)
+{
+    for(int i = 0; i < 16; ++i)
+    {
+        if(c.is_key_pressed[i] == true)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
 
 struct chip_8 load_program_in_memory(struct chip_8 c, char* pathname)
 {
@@ -141,264 +170,460 @@ void dump_memory(struct chip_8 c)
 
 
 //Le programme en mémoire va de l'index 512 à 643
-void handle_instructions(struct chip_8 c)
+struct chip_8 handle_instructions(struct chip_8 c)
 {
-    c.cpu.program_counter = START_ADDRESS;
+    //c.cpu.program_counter = 0;
 
-    while(c.cpu.program_counter != RAM_SIZE)
+    printf("PC : %d\n", c.cpu.program_counter);
+
+    //while(c.cpu.program_counter != RAM_SIZE)
+    //{
+    uint16_t instruction = ((c.memory.memory_array[c.cpu.program_counter] << 8) | (c.memory.memory_array[c.cpu.program_counter + 1])); //Big endian
+
+    uint8_t first_nibble = instruction >> 12;
+    uint8_t second_nibble = (0x0F00 & instruction) >> 8;
+    uint8_t third_nibble = (0x00F0 & instruction) >> 4;
+    uint8_t fourth_nibble = 0x000F & instruction;
+
+    if(instruction != 0)
     {
-        uint16_t instruction = ((c.memory.memory_array[c.cpu.program_counter] << 8) | (c.memory.memory_array[c.cpu.program_counter + 1])); //Big endian
         printf("%04x ", instruction);
-
-        uint8_t first_nibble = instruction >> 12;
-        uint8_t second_nibble = (0x0F00 & instruction) >> 8;
-        uint8_t third_nibble = (0x00F0 & instruction) >> 4;
-        uint8_t fourth_nibble = 0x000F & instruction;
-
         printf("%.1x %.1x %.1x %.1x ", first_nibble, second_nibble, third_nibble, fourth_nibble);
+    }
 
-        bool program_counter_edited = false;
+    bool program_counter_edited = false;
 
-        switch(first_nibble)
-        {
-            case 0x0:
-                if(second_nibble == 0x0 && third_nibble == 0xE)
+    switch(first_nibble)
+    {
+        case 0x0:
+            if(second_nibble == 0x0 && third_nibble == 0xE)
+            {
+                if(fourth_nibble == 0x0)
                 {
-                    if(fourth_nibble == 0x0)
+                    printf("(Clear screen)\n");
+                    clear_all_pixels(c);
+                }
+                else if(fourth_nibble == 0xE)
+                {
+                    printf("(Return)################################################################ ");
+                    c.stack = pop_stack(c.stack, &c.cpu.program_counter);
+                    printf("Adresse de retour : %d\n", c.cpu.program_counter);
+                    //program_counter_edited = true;
+                }
+            }
+            break;
+
+        case 0x1:
+            {
+                printf("(Jump) ");
+                uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
+                printf("Address : %04x\n", address);
+                c.cpu.program_counter = /*START_ADDRESS + */address; //TODO
+                program_counter_edited = true;
+            }
+            break;
+
+        case 0x2:
+            {
+                printf("(Jump) ");
+                uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
+                printf("Address : %04x\n", address);
+                c.cpu.program_counter = /*START_ADDRESS + */address; //TODO
+                c.stack = push_stack(c.stack, c.cpu.program_counter);
+                program_counter_edited = true;
+            }
+            break;
+
+        case 0x3:
+            {
+                printf("(Skip if VX == NN) ");
+                uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                uint8_t nn = third_nibble << 4 | fourth_nibble;
+                printf(" Value of V%d : %d, value of NN : %d", second_nibble, value_in_vx, nn);
+                //program_counter_edited = true; //TODO : for not modifying PC if the condition is false
+                if(value_in_vx == nn)
+                {
+                    c.cpu.program_counter += 2;
+                    printf(" -> Skip\n");
+                }
+                else printf(" -> No skip\n");
+            }
+            break;
+
+        case 0x4:
+            {
+                printf("(Skip if VX != NN)\n");
+                uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                uint8_t nn = third_nibble << 4 | fourth_nibble;
+                printf(" Value of V%d : %d, value of NN : %d", second_nibble, value_in_vx, nn);
+                //program_counter_edited = true; //for not modifying PC if the condition is false
+                if(value_in_vx != nn)
+                {
+                    c.cpu.program_counter += 2;
+                    printf(" -> Skip\n");
+                }
+                else printf(" -> No skip\n");
+            }
+            break;
+
+        case 0x5:
+            {
+                printf("(Skip if VX == VY)\n");
+                uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                printf(" Value of V%d : %d, value of V%d : %d", second_nibble, value_in_vx, third_nibble, value_in_vy);
+                //program_counter_edited = true; //for not modifying PC if the condition is false
+                if(value_in_vx == value_in_vy)
+                {
+                    c.cpu.program_counter += 2;
+                    printf(" -> Skip\n");
+                }
+                else printf(" -> No skip\n");
+            }
+            break;
+
+        case 0x6:
+            {
+                uint8_t value = third_nibble << 4 | fourth_nibble;
+                uint8_t index = second_nibble;
+                c.cpu.v_registers[index] = value;
+                printf("(Put value %d in V%d register)\n", value, index);
+            }
+            break;
+
+        case 0x7:
+            {
+                uint8_t value = third_nibble << 4 | fourth_nibble;
+                uint8_t index = second_nibble;
+                c.cpu.v_registers[index] += value;
+                printf("(Add value %d in V%d register)\n", value, index);
+            }
+            break;
+
+        case 0x8:
+            switch(fourth_nibble)
+            {
+                case 0x0:
+                    printf("(Set VX to VY)\n");
                     {
-                        printf("(Clear screen)\n");
-                        clear_all_pixels(c);
+                        uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                        c.cpu.v_registers[second_nibble] = value_in_vy;
                     }
-                    else if(fourth_nibble == 0xE)
+                    break;
+
+                case 0x1:
+                    printf("(Set VX to VX | VY)\n");
                     {
-                        printf("(Return)\n");
-                        c.stack = pop_stack(c.stack, &c.cpu.program_counter);
+                        uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                        c.cpu.v_registers[second_nibble] |= value_in_vy;
                     }
-                }
-                else
-                {
-                    printf("(Unknown)\n");
-                }
-                break;
+                    break;
 
-            case 0x1:
-                {
-                    printf("(Jump)\n");
-                    uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
-                    printf("Address : %04x\n", address);
-                    c.cpu.program_counter = START_ADDRESS + address;
-                    program_counter_edited = true;
-                }
-                break;
-
-            case 0x2:
-                {
-                    printf("(Jump)\n");
-                    uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
-                    printf("Address : %04x\n", address);
-                    c.cpu.program_counter = START_ADDRESS + address;
-                    push_stack(c.stack, c.cpu.program_counter);
-                    program_counter_edited = true;
-                }
-                break;
-
-            case 0x3:
-                break;
-
-            case 0x4:
-                break;
-
-            case 0x5:
-                break;
-
-            case 0x6:
-                {
-                    uint8_t value = third_nibble << 4 | fourth_nibble;
-                    uint8_t index = second_nibble;
-                    c.cpu.v_registers[index] = value;
-                    printf("(Put value %d in V%d register)\n", value, index);
-                }
-                break;
-
-            case 0x7:
-                {
-                    uint8_t value = third_nibble << 4 | fourth_nibble;
-                    uint8_t index = second_nibble;
-                    c.cpu.v_registers[index] += value;
-                    printf("(Add value %d in V%d register)\n", value, index);
-                }
-                break;
-
-            case 0x8:
-                switch(fourth_nibble)
-                {
-                    case 0x0:
-                        break;
-
-                    case 0x1:
-                        break;
-
-                    case 0x2:
-                        break;
-
-                    case 0x3:
-                        break;
-
-                    case 0x4:
-                        break;
-
-                    case 0x5:
-                        break;
-
-                    case 0x6:
-                        break;
-
-                    case 0x7:
-                        break;
-
-                    case 0xE:
-                        break;
-
-                    default:
-                        break;
-                }
-
-                break;
-
-            case 0x9:
-                break;
-
-            case 0xA:
-                {
-                    uint16_t value = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
-                    c.cpu.index_register = value; //value and not START_ADDRESS + value
-                    printf("(Store address %d in index register)\n", value);
-                    //printf("Adresse stockée dans I : %p\n", c.cpu.index_register);
-                }
-                break;
-
-            case 0xB:
-                break;
-
-            case 0xC:
-                break;
-
-            case 0xD:
-
-                printf("(Display)\n");
-                {
-                    uint8_t register_x = second_nibble;
-                    uint8_t register_y = third_nibble;
-
-                    int x_pos = c.cpu.v_registers[register_x] & (DISPLAY_WIDTH - 1);
-                    int y_pos = c.cpu.v_registers[register_y] & (DISPLAY_HEIGHT - 1);
-
-                    printf("Valeur de xpos : %d et ypos : %d\n", x_pos, y_pos);
-
-                    c.cpu.v_registers[0xF] = 0;
-
-                    uint8_t n = fourth_nibble;
-
-                    for(uint8_t y = 0; y < n; ++y)
+                case 0x2:
+                    printf("(Set VX to VX & VY)\n");
                     {
-                        uint8_t nth_byte = c.memory.memory_array[c.cpu.index_register + y];
-                        printf("Valeur de nth_byte : %u\n", nth_byte);
+                        uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                        c.cpu.v_registers[second_nibble] &= value_in_vy;
+                    }
+                    break;
 
-                        for(uint8_t x = 0; x < 8; ++x)
+                case 0x3:
+                    printf("(Set VX to VX ^ VY)\n");
+                    {
+                        uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                        c.cpu.v_registers[second_nibble] ^= value_in_vy;
+                    }
+                    break;
+
+                case 0x4:
+                    printf("(Set VX to VX + VY)\n");
+                    {
+                        uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                        uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                        if(value_in_vx + value_in_vy > 255)
                         {
-                            int pixel_x = (x_pos + x) % DISPLAY_WIDTH;
-                            int pixel_y = (y_pos + y) % DISPLAY_HEIGHT;
+                            c.cpu.v_registers[0xF] = 1;
+                        }
+                        else c.cpu.v_registers[0xF] = 0;
 
-                            if(nth_byte & (0x80 >> x))
+                        c.cpu.v_registers[second_nibble] += value_in_vy;
+                    }
+                    break;
+
+                case 0x5:
+                    printf("(Set VX to VX - VY)\n");
+                    {
+                        uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                        uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                        if(value_in_vx > value_in_vy)
+                        {
+                            c.cpu.v_registers[0xF] = 1;
+                        }
+                        else c.cpu.v_registers[0xF] = 0;
+
+                        c.cpu.v_registers[second_nibble] -= value_in_vy;
+                    }
+                    break;
+
+                case 0x6:
+                    printf("(Set VX to VX >> VY)\n");
+                    {
+                        c.cpu.v_registers[second_nibble] = c.cpu.v_registers[third_nibble]; //VX = VY
+                        if((c.cpu.v_registers[second_nibble] & 0x01) == 0)
+                        {
+                            c.cpu.v_registers[0xF] = 0;
+                        }
+                        else
+                        {
+                            c.cpu.v_registers[0xF] = 1;
+                        }
+                        c.cpu.v_registers[second_nibble] >>= 1;
+                    }
+                    break;
+
+                case 0x7:
+                    printf("(Set VX to VY - VX)\n");
+                    {
+                        uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                        uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                        if(value_in_vy > value_in_vx)
+                        {
+                            c.cpu.v_registers[0xF] = 1;
+                        }
+                        else c.cpu.v_registers[0xF] = 0;
+
+                        c.cpu.v_registers[second_nibble] = value_in_vy - value_in_vx;
+                    }
+                    break;
+
+                case 0xE:
+                    printf("(Set VX to VX << VY)\n");
+                    {
+                        c.cpu.v_registers[second_nibble] = c.cpu.v_registers[third_nibble]; //VX = VY
+                        if((c.cpu.v_registers[second_nibble] & 0x80) == 0)
+                        {
+                            c.cpu.v_registers[0xF] = 0;
+                        }
+                        else
+                        {
+                            c.cpu.v_registers[0xF] = 1;
+                        }
+                        c.cpu.v_registers[second_nibble] <<= 1;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+
+            break;
+
+        case 0x9:
+            {
+                printf("(Skip if VX != VY)\n");
+                uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                printf(" Value of V%d : %d, value of V%d : %d", second_nibble, value_in_vx, third_nibble, value_in_vy);
+                //program_counter_edited = true; //for not modifying PC if the condition is false
+                if(value_in_vx != value_in_vy)
+                {
+                    c.cpu.program_counter += 2;
+                    printf(" -> Skip\n");
+                }
+                else printf(" -> No skip\n");
+            }
+            break;
+
+        case 0xA:
+            {
+                uint16_t value = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
+                c.cpu.index_register = value; //value and not START_ADDRESS + value
+                printf("(Store address %d in index register)\n", value);
+                //printf("Adresse stockée dans I : %p\n", c.cpu.index_register);
+            }
+            break;
+
+        case 0xB:
+            printf("(Jump with offset) ");
+            {
+                uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
+                printf("Address : %04x\n", address);
+                uint8_t value_in_v0 = c.cpu.v_registers[0];
+                c.cpu.program_counter = /*START_ADDRESS + */address + value_in_v0;
+                c.stack = push_stack(c.stack, c.cpu.program_counter);
+                program_counter_edited = true;
+            }
+            break;
+
+        case 0xC:
+            printf("(Generate random number)\n");
+            {
+                int r = rand() % 256;
+                uint8_t nn = third_nibble << 4 | fourth_nibble;
+                c.cpu.v_registers[second_nibble] = r & nn;
+            }
+            break;
+
+        case 0xD:
+
+            printf("(Display)\n");
+            {
+                uint8_t register_x = second_nibble;
+                uint8_t register_y = third_nibble;
+
+                int x_pos = c.cpu.v_registers[register_x] & (DISPLAY_WIDTH - 1);
+                int y_pos = c.cpu.v_registers[register_y] & (DISPLAY_HEIGHT - 1);
+
+                printf("Valeur de xpos : %d et ypos : %d\n", x_pos, y_pos);
+
+                c.cpu.v_registers[0xF] = 0;
+
+                uint8_t n = fourth_nibble;
+
+                for(uint8_t y = 0; y < n; ++y)
+                {
+                    uint8_t nth_byte = c.memory.memory_array[c.cpu.index_register + y];
+                    printf("Valeur de nth_byte : %u\n", nth_byte);
+
+                    for(uint8_t x = 0; x < 8; ++x)
+                    {
+                        int pixel_x = (x_pos + x) % DISPLAY_WIDTH;
+                        int pixel_y = (y_pos + y) % DISPLAY_HEIGHT;
+
+                        if(nth_byte & (0x80 >> x))
+                        {
+                            printf("Le bit %d vaut 1\n", x);
+                            if(check_if_specific_pixel_on(c, pixel_x, pixel_y))
                             {
-                                printf("Le bit %d vaut 1\n", x);
-                                if(check_if_specific_pixel_on(c, pixel_x, pixel_y))
-                                {
-                                    printf("Le pixel (%d, %d) sur l'écran était en couleur\n", pixel_x, pixel_y);
-                                    color_specific_pixel(c, pixel_x, pixel_y, 0xFF000000);
-                                    c.cpu.v_registers[0xF] = 1;
-                                }
-                                else
-                                {
-                                    printf("Le pixel (%d, %d) sur l'écran n'était pas en couleur\n", pixel_x, pixel_y);
-                                    color_specific_pixel(c, pixel_x, pixel_y, 0xFFFFFFFF);
-                                    c.cpu.v_registers[0xF] = 0;
-                                }
+                                printf("Le pixel (%d, %d) sur l'écran était en couleur\n", pixel_x, pixel_y);
+                                color_specific_pixel(c, pixel_x, pixel_y, 0xFF000000);
+                                c.cpu.v_registers[0xF] = 1;
                             }
                             else
                             {
-                                printf("Le bit %d vaut 0\n", x);
+                                printf("Le pixel (%d, %d) sur l'écran n'était pas en couleur\n", pixel_x, pixel_y);
+                                color_specific_pixel(c, pixel_x, pixel_y, 0xFFFFFFFF);
+                                c.cpu.v_registers[0xF] = 0;
                             }
+                        }
+                        else
+                        {
+                            printf("Le bit %d vaut 0\n", x);
                         }
                     }
                 }
-                break;
+            }
+            break;
 
-            case 0xE:
-                if(third_nibble == 0x9 && fourth_nibble == 0xE)
+        case 0xE:
+            if(third_nibble == 0x9 && fourth_nibble == 0xE)
+            {
+                printf("(Skip instruction if key pressed)\n");
+                uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                //program_counter_edited = true; //for not modifying PC if the condition is false
+                if(c.is_key_pressed[value_in_vx] == true)
                 {
-
+                    c.cpu.program_counter += 2;
                 }
-                else if(third_nibble == 0xA && fourth_nibble == 0x1)
+            }
+            else if(third_nibble == 0xA && fourth_nibble == 0x1)
+            {
+                printf("(Skip instruction if key is not pressed)\n");
+                uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                //program_counter_edited = true; //for not modifying PC if the condition is false
+                if(c.is_key_pressed[value_in_vx] == false)
                 {
-
+                    c.cpu.program_counter += 2;
                 }
-                break;
+            }
+            break;
 
-            case 0xF:
-                if(third_nibble == 0x0)
+        case 0xF:
+            if(third_nibble == 0x0)
+            {
+                if(fourth_nibble == 0x7)
                 {
-                    if(fourth_nibble == 0x7)
+                    printf("(Set VX to the value in delay timer)\n");
+                    c.cpu.v_registers[second_nibble] = c.cpu.delay_timer;
+                }
+                else if(fourth_nibble == 0xA)
+                {
+                    printf("(Wait for user input)\n");
+                    if(!check_if_any_key_pressed(c))
                     {
-
+                        c.cpu.program_counter -= 2;
                     }
-                    else if(fourth_nibble == 0xA)
+                    else
                     {
-
+                        int index = get_pressed_key(c);
+                        c.cpu.v_registers[second_nibble] = index;
                     }
                 }
-                else if(third_nibble == 0x1)
+            }
+            else if(third_nibble == 0x1)
+            {
+                if(fourth_nibble == 0x5)
                 {
-                    if(fourth_nibble == 0x5)
-                    {
-
-                    }
-                    else if(fourth_nibble == 0x8)
-                    {
-
-                    }
-                    else if(fourth_nibble == 0xE)
-                    {
-
-                    }
+                    printf("(Set delay timer to the value in VX)\n");
+                    c.cpu.delay_timer = c.cpu.v_registers[second_nibble];
                 }
-                else if(third_nibble == 0x2)
+                else if(fourth_nibble == 0x8)
                 {
-
+                    printf("(Set sound timer to the value in VX)\n");
+                    c.cpu.sound_timer = c.cpu.v_registers[second_nibble];
                 }
-                else if(third_nibble == 0x3)
+                else if(fourth_nibble == 0xE)
                 {
-
+                    printf("(Set Index register to Index register + VX)\n");
+                    c.cpu.index_register += c.cpu.v_registers[second_nibble];
                 }
-                else if(third_nibble == 0x5)
+            }
+            else if(third_nibble == 0x2)
+            {
+                printf("(Set Index register to the address in VX)\n");
+                c.cpu.index_register = 80 + (c.cpu.v_registers[second_nibble] * 5);
+            }
+            else if(third_nibble == 0x3)
+            {
+                printf("(Convert byte number to three decimal digits)\n");
+                uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
+                c.memory.memory_array[c.cpu.index_register] = value_in_vx / 100;
+                c.memory.memory_array[c.cpu.index_register + 1] = (value_in_vx % 100) / 10;
+                c.memory.memory_array[c.cpu.index_register + 2] = (value_in_vx % 100) % 10;
+            }
+            else if(third_nibble == 0x5)
+            {
+                printf("(Save all V registers value in memory beginning at the Index register)\n");
+                uint8_t x = second_nibble;
+                for(uint16_t i = 0; i <= x; ++i)
                 {
-
+                    c.memory.memory_array[c.cpu.index_register + i] = c.cpu.v_registers[i];
                 }
-                else if(third_nibble == 0x6)
+            }
+            else if(third_nibble == 0x6)
+            {
+                printf("(Load in all V registers the values that are in memory beginning at the Index register)");
+                uint8_t x = second_nibble;
+                for(uint16_t i = 0; i <= x; ++i)
                 {
-
+                    c.cpu.v_registers[i] = c.memory.memory_array[c.cpu.index_register + i];
+                    printf(" Contenu de V%d : %d", i, c.cpu.v_registers[i]);
                 }
-                break;
+                printf("\n");
+            }
+            break;
 
-            default:
-                printf("(Unknown for now)\n");
-                break;
-        }
-        if(!program_counter_edited)
-        {
-            c.cpu.program_counter += 2;
-        }
+        default:
+            printf("(Unknown for now)\n");
+            break;
+    //}
     }
+    if(!program_counter_edited)
+    {
+        c.cpu.program_counter += 2;
+    }
+
+    return c;
 }
 
 

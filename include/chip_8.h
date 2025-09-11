@@ -29,6 +29,8 @@ struct cpu
     uint16_t program_counter;
     uint16_t index_register;
     uint8_t v_registers[16];
+    uint8_t delay_timer;
+    uint8_t sound_timer;
 };
 
 
@@ -44,6 +46,7 @@ struct chip_8
     struct cpu cpu;
     struct memory memory;
     struct stack stack;
+    bool is_key_pressed[16];
 };
 
 
@@ -51,9 +54,11 @@ struct chip_8 create_chip_8(void);
 struct chip_8 clear_all_pixels(struct chip_8 c);
 struct chip_8 color_specific_pixel(struct chip_8 c, int x, int y, Uint32 color);
 bool check_if_specific_pixel_on(struct chip_8 c, int x, int y);
+bool check_if_any_key_pressed(struct chip_8 c);
+int get_pressed_key(struct chip_8 c);
 struct chip_8 load_program_in_memory(struct chip_8 c, char* pathname);
 void dump_memory(struct chip_8 c);
-void handle_instructions(struct chip_8 c);
+struct chip_8 handle_instructions(struct chip_8 c);
 void destroy_chip_8(struct chip_8* c);
 
 
