@@ -6,12 +6,12 @@
 struct stack create_stack(void)
 {
     struct stack s;
-    memset(s.addresses, 0, MAX_STACK_SIZE * sizeof(int16_t));
+    memset(s.addresses, 0, MAX_STACK_SIZE * sizeof(uint16_t));
     s.actual_top = 0;
     return s;
 }
 
-struct stack push_stack(struct stack s, int16_t address)
+struct stack push_stack(struct stack s, uint16_t address)
 {
     if(s.actual_top < MAX_STACK_SIZE)
     {
@@ -23,10 +23,11 @@ struct stack push_stack(struct stack s, int16_t address)
     return s;
 }
 
-struct stack pop_stack(struct stack s)
+struct stack pop_stack(struct stack s, uint16_t* program_counter)
 {
     if(s.actual_top > 0)
     {
+        *program_counter = s.actual_top;
         s.addresses[s.actual_top] = 0;
         s.actual_top -= 1;
     }
@@ -35,7 +36,7 @@ struct stack pop_stack(struct stack s)
     return s;
 }
 
-int16_t get_top_stack(struct stack s)
+uint16_t get_top_stack(struct stack s)
 {
     return s.addresses[s.actual_top];
 }

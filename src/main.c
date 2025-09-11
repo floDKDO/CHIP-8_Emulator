@@ -9,7 +9,9 @@ int main(void)
     CHK(SDL_Init(SDL_INIT_EVERYTHING));
 
     struct chip_8 c = create_chip_8();
-    c = load_program_in_memory(c, "IBM Logo.ch8");
+    //c = load_program_in_memory(c, "test_roms/IBM Logo.ch8");
+    //c = load_program_in_memory(c, "test_roms/3-corax+.ch8");
+    c = load_program_in_memory(c, "test_roms/1-chip8-logo.ch8");
     dump_memory(c);
 
     bool quit = false;

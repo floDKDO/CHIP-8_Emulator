@@ -19,18 +19,58 @@ struct chip_8 create_chip_8(void)
     c.display.rect.y = 0;
     c.display.rect.w = DISPLAY_WIDTH;
     c.display.rect.h = DISPLAY_HEIGHT;
-    NCHK(c.display.texture = SDL_CreateTexture(c.display.renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, DISPLAY_WIDTH, DISPLAY_HEIGHT));
+    NCHK(c.display.texture = SDL_CreateTexture(c.display.renderer, SDL_PIXELFORMAT_RGBA8888, SDL_TEXTUREACCESS_STREAMING, DISPLAY_WIDTH, DISPLAY_HEIGHT));
 
-    memset(c.memory.memory_array, 0, RAM_SIZE * sizeof(char));
+    memset(c.memory.memory_array, 0, RAM_SIZE * sizeof(uint8_t));
 
-    c.cpu.program_counter = &(c.memory.memory_array[START_ADDRESS]);
-    c.cpu.index_register = NULL;
-    memset(c.cpu.v_registers, 0, 16 * sizeof(unsigned char));
+    uint8_t font[80] =
+    {
+        0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+        0x20, 0x60, 0x20, 0x20, 0x70, // 1
+        0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+        0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+        0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+        0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+        0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+        0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+        0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+        0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+        0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+        0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+        0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+        0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+        0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+        0xF0, 0x80, 0xF0, 0x80, 0x80  // F
+    };
+
+    memcpy(c.memory.memory_array + 80, font, sizeof(font));
+
+    c.cpu.program_counter = START_ADDRESS;
+    c.cpu.index_register = 0;
+    memset(c.cpu.v_registers, 0, 16 * sizeof(uint8_t));
 
     c.stack = create_stack();
 
     return c;
 }
+
+
+struct chip_8 clear_all_pixels(struct chip_8 c)
+{
+    void* pixels;
+    int pitch;
+
+    CHK(SDL_LockTexture(c.display.texture, NULL, &pixels, &pitch));
+
+    Uint32* pixelsPtr = ((Uint32*)pixels);
+
+    memset(pixelsPtr, 0xFF000000, pitch * DISPLAY_HEIGHT);
+
+    SDL_UnlockTexture(c.display.texture);
+
+    return c;
+}
+
 
 
 struct chip_8 color_specific_pixel(struct chip_8 c, int x, int y, Uint32 color)
@@ -103,11 +143,11 @@ void dump_memory(struct chip_8 c)
 //Le programme en mémoire va de l'index 512 à 643
 void handle_instructions(struct chip_8 c)
 {
-    c.cpu.program_counter = &(c.memory.memory_array[START_ADDRESS]);
+    c.cpu.program_counter = START_ADDRESS;
 
-    while(c.cpu.program_counter != &(c.memory.memory_array[RAM_SIZE]))
+    while(c.cpu.program_counter != RAM_SIZE)
     {
-        uint16_t instruction = (*(c.cpu.program_counter) << 8) | (*(c.cpu.program_counter + 1)); //Big endian
+        uint16_t instruction = ((c.memory.memory_array[c.cpu.program_counter] << 8) | (c.memory.memory_array[c.cpu.program_counter + 1])); //Big endian
         printf("%04x ", instruction);
 
         uint8_t first_nibble = instruction >> 12;
@@ -127,11 +167,12 @@ void handle_instructions(struct chip_8 c)
                     if(fourth_nibble == 0x0)
                     {
                         printf("(Clear screen)\n");
-                        SDL_RenderClear(c.display.renderer);
+                        clear_all_pixels(c);
                     }
                     else if(fourth_nibble == 0xE)
                     {
                         printf("(Return)\n");
+                        c.stack = pop_stack(c.stack, &c.cpu.program_counter);
                     }
                 }
                 else
@@ -145,13 +186,20 @@ void handle_instructions(struct chip_8 c)
                     printf("(Jump)\n");
                     uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
                     printf("Address : %04x\n", address);
-                    c.cpu.program_counter = &(c.memory.memory_array[START_ADDRESS + address]);
-                    //printf("Adresse de PC : %p, adresse case : %p\n", c.cpu.program_counter, &(c.memory.memory_array[START_ADDRESS]));
+                    c.cpu.program_counter = START_ADDRESS + address;
                     program_counter_edited = true;
                 }
                 break;
 
             case 0x2:
+                {
+                    printf("(Jump)\n");
+                    uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
+                    printf("Address : %04x\n", address);
+                    c.cpu.program_counter = START_ADDRESS + address;
+                    push_stack(c.stack, c.cpu.program_counter);
+                    program_counter_edited = true;
+                }
                 break;
 
             case 0x3:
@@ -223,7 +271,7 @@ void handle_instructions(struct chip_8 c)
             case 0xA:
                 {
                     uint16_t value = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
-                    c.cpu.index_register = &(c.memory.memory_array[value]); //[value] and not [START_ADDRESS + value]
+                    c.cpu.index_register = value; //value and not START_ADDRESS + value
                     printf("(Store address %d in index register)\n", value);
                     //printf("Adresse stockée dans I : %p\n", c.cpu.index_register);
                 }
@@ -253,7 +301,7 @@ void handle_instructions(struct chip_8 c)
 
                     for(uint8_t y = 0; y < n; ++y)
                     {
-                        uint8_t nth_byte = c.cpu.index_register[y];
+                        uint8_t nth_byte = c.memory.memory_array[c.cpu.index_register + y];
                         printf("Valeur de nth_byte : %u\n", nth_byte);
 
                         for(uint8_t x = 0; x < 8; ++x)

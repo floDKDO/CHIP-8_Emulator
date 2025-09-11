@@ -26,15 +26,15 @@ struct display
 
 struct cpu
 {
-    unsigned char* program_counter;
-    unsigned char* index_register;
-    unsigned char v_registers[16];
+    uint16_t program_counter;
+    uint16_t index_register;
+    uint8_t v_registers[16];
 };
 
 
 struct memory
 {
-    unsigned char memory_array[RAM_SIZE];
+    uint8_t memory_array[RAM_SIZE];
 };
 
 
@@ -48,6 +48,7 @@ struct chip_8
 
 
 struct chip_8 create_chip_8(void);
+struct chip_8 clear_all_pixels(struct chip_8 c);
 struct chip_8 color_specific_pixel(struct chip_8 c, int x, int y, Uint32 color);
 bool check_if_specific_pixel_on(struct chip_8 c, int x, int y);
 struct chip_8 load_program_in_memory(struct chip_8 c, char* pathname);
