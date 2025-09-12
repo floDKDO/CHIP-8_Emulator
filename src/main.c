@@ -15,23 +15,25 @@ int main(void)
     beep_sound = Mix_LoadWAV("beep_sound.wav");
 
     struct chip_8 c = create_chip_8();
-    //c = load_program_in_memory(c, "test_roms/IBM Logo.ch8");
-    c = load_program_in_memory(c, "test_roms/3-corax+.ch8");
     //c = load_program_in_memory(c, "test_roms/1-chip8-logo.ch8");
+    //c = load_program_in_memory(c, "test_roms/2-ibm-logo.ch8");
+    //c = load_program_in_memory(c, "test_roms/3-corax+.ch8");
+    //c = load_program_in_memory(c, "test_roms/4-flags.ch8");
+    //c = load_program_in_memory(c, "test_roms/5-quirks.ch8");
+    c = load_program_in_memory(c, "test_roms/6-keypad.ch8");
+    //c = load_program_in_memory(c, "test_roms/7-beep.ch8");
     dump_memory(c);
 
-    /*uint16_t valeur;
-    struct stack s = create_stack();
-    s = push_stack(s, 0x4423);
-    s = pop_stack(s, &valeur);
-    printf("Valeur : %d\n", valeur);*/
-
     srand(time(NULL));
+
+	Uint32 begin_time, end_time;
 
     bool attendre = true;
     bool quit = false;
     while(!quit)
     {
+        begin_time = SDL_GetTicks();
+
         SDL_Event e;
         while(SDL_PollEvent(&e))
         {
@@ -46,7 +48,6 @@ int main(void)
                     break;
 
                 case SDL_KEYDOWN :
-
                     switch(e.key.keysym.sym)
                     {
                         case SDLK_ESCAPE:
@@ -128,6 +129,7 @@ int main(void)
 
                 case SDL_KEYUP :
 
+                    c.index_last_pressed_key = -1;
                     switch(e.key.keysym.sym)
                     {
                         case SDLK_1:
@@ -213,15 +215,8 @@ int main(void)
             Mix_PlayChannel(1, beep_sound, 0);
         }
 
-        if(c.cpu.delay_timer > 0)
-        {
-           c.cpu.delay_timer -= 1;
-        }
-
         //printf("LOOP\n");
         CHK(SDL_RenderClear(c.display.renderer));
-        //color_specific_pixel(c, 63, 31, 0xFFFFFFFF);
-        //printf("BOOL : %d\n", check_if_specific_pixel_on(c, 0, 0));
 
         //if(attendre == false)
             c = handle_instructions(c);
@@ -229,7 +224,23 @@ int main(void)
 
         CHK(SDL_RenderCopy(c.display.renderer, c.display.texture, NULL, NULL));
         SDL_RenderPresent(c.display.renderer);
-        SDL_Delay(32);
+
+        end_time = SDL_GetTicks();
+
+		if(end_time - begin_time <= 16) //limit to 60 FPS
+		{
+			//SDL_Delay(16 - (end_time - begin_time));
+
+            if(c.cpu.delay_timer > 0)
+            {
+               c.cpu.delay_timer -= 1;
+            }
+
+            if(c.cpu.sound_timer > 0)
+            {
+               c.cpu.sound_timer -= 1;
+            }
+		}
     }
 
     destroy_chip_8(&c);

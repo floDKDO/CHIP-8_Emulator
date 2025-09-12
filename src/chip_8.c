@@ -46,6 +46,7 @@ struct chip_8 create_chip_8(void)
     memcpy(c.memory.memory_array + 80, font, sizeof(font));
 
     c.cpu.program_counter = START_ADDRESS;
+    c.cpu.stack_pointer = 0;
     c.cpu.index_register = 0;
     memset(c.cpu.v_registers, 0, 16 * sizeof(uint8_t));
     c.cpu.delay_timer = 0;
@@ -53,7 +54,8 @@ struct chip_8 create_chip_8(void)
 
     c.stack = create_stack();
 
-    memset(c.is_key_pressed, 0, 16 * sizeof(bool));
+    memset(c.is_key_pressed, false, 16 /** 2*/ * sizeof(bool));
+    c.key_already_pressed = false;
 
     return c;
 }
@@ -108,7 +110,7 @@ bool check_if_specific_pixel_on(struct chip_8 c, int x, int y)
 
     bool is_present = (pixelsPtr[index] != 0x00000000 && pixelsPtr[index] != 0xFF000000);
 
-    printf("Valeur de is_present (%d) pour le pixel (%08x) à l'index %d\n", is_present, pixelsPtr[index], index);
+    //printf("Valeur de is_present (%d) pour le pixel (%08x) à l'index %d\n", is_present, pixelsPtr[index], index);
 
     SDL_UnlockTexture(c.display.texture);
 
@@ -129,6 +131,20 @@ bool check_if_any_key_pressed(struct chip_8 c)
 }
 
 
+/*bool check_if_any_key_pressed_and_released(struct chip_8 c)
+{
+    for(int i = 0; i < 16; ++i)
+    {
+        if(c.is_key_pressed[i][0] == true && c.is_key_pressed[i][1] == true)
+        {
+            return true;
+        }
+    }
+    return false;
+}*/
+
+
+
 int get_pressed_key(struct chip_8 c)
 {
     for(int i = 0; i < 16; ++i)
@@ -139,6 +155,30 @@ int get_pressed_key(struct chip_8 c)
         }
     }
     return -1;
+}
+
+
+/*int get_pressed_and_released_key(struct chip_8 c)
+{
+    for(int i = 0; i < 16; ++i)
+    {
+        if(c.is_key_pressed[i][0] == true && c.is_key_pressed[i][1] == false)
+        {
+            return i;
+        }
+    }
+    return -1;
+}*/
+
+
+struct chip_8 reset_all_keys(struct chip_8 c)
+{
+    for(int i = 0; i < 16; ++i)
+    {
+        c.is_key_pressed[i] = false;
+        //c.is_key_pressed[i][1] = false;
+    }
+    return c;
 }
 
 
@@ -205,8 +245,13 @@ struct chip_8 handle_instructions(struct chip_8 c)
                 }
                 else if(fourth_nibble == 0xE)
                 {
-                    printf("(Return)################################################################ ");
-                    c.stack = pop_stack(c.stack, &c.cpu.program_counter);
+                    printf("(Return) ");
+                    //c.stack = pop_stack(c.stack, &c.cpu.program_counter);
+
+                    printf("Valeur de SP : %d\n", c.cpu.stack_pointer);
+                    c.cpu.stack_pointer -= 1;
+                    c.cpu.program_counter = c.stack.addresses[c.cpu.stack_pointer];
+
                     printf("Adresse de retour : %d\n", c.cpu.program_counter);
                     //program_counter_edited = true;
                 }
@@ -228,8 +273,11 @@ struct chip_8 handle_instructions(struct chip_8 c)
                 printf("(Jump) ");
                 uint16_t address = second_nibble << 8 | third_nibble << 4 | fourth_nibble;
                 printf("Address : %04x\n", address);
-                c.cpu.program_counter = /*START_ADDRESS + */address; //TODO
-                c.stack = push_stack(c.stack, c.cpu.program_counter);
+                c.stack.addresses[c.cpu.stack_pointer] = c.cpu.program_counter; //First push PC to the stack
+                c.cpu.program_counter = /*START_ADDRESS + */address; //TODO : and then set PC to NNN
+                //c.stack = push_stack(c.stack, c.cpu.program_counter);
+                c.cpu.stack_pointer += 1;
+
                 program_counter_edited = true;
             }
             break;
@@ -269,6 +317,7 @@ struct chip_8 handle_instructions(struct chip_8 c)
         case 0x5:
             {
                 printf("(Skip if VX == VY)\n");
+
                 uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
                 uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
                 printf(" Value of V%d : %d, value of V%d : %d", second_nibble, value_in_vx, third_nibble, value_in_vy);
@@ -340,13 +389,12 @@ struct chip_8 handle_instructions(struct chip_8 c)
                     {
                         uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
                         uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
+                        c.cpu.v_registers[second_nibble] += value_in_vy;
                         if(value_in_vx + value_in_vy > 255)
                         {
                             c.cpu.v_registers[0xF] = 1;
                         }
                         else c.cpu.v_registers[0xF] = 0;
-
-                        c.cpu.v_registers[second_nibble] += value_in_vy;
                     }
                     break;
 
@@ -355,13 +403,15 @@ struct chip_8 handle_instructions(struct chip_8 c)
                     {
                         uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
                         uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
-                        if(value_in_vx > value_in_vy)
+                        c.cpu.v_registers[second_nibble] -= value_in_vy;
+                        if(value_in_vx >= value_in_vy)
                         {
                             c.cpu.v_registers[0xF] = 1;
                         }
-                        else c.cpu.v_registers[0xF] = 0;
-
-                        c.cpu.v_registers[second_nibble] -= value_in_vy;
+                        else if(value_in_vy > value_in_vx)
+                        {
+                            c.cpu.v_registers[0xF] = 0;
+                        }
                     }
                     break;
 
@@ -369,7 +419,9 @@ struct chip_8 handle_instructions(struct chip_8 c)
                     printf("(Set VX to VX >> VY)\n");
                     {
                         c.cpu.v_registers[second_nibble] = c.cpu.v_registers[third_nibble]; //VX = VY
-                        if((c.cpu.v_registers[second_nibble] & 0x01) == 0)
+                        uint16_t vx_before_modif = c.cpu.v_registers[second_nibble];
+                        c.cpu.v_registers[second_nibble] >>= 1;
+                        if((vx_before_modif & 0x01) == 0)
                         {
                             c.cpu.v_registers[0xF] = 0;
                         }
@@ -377,7 +429,6 @@ struct chip_8 handle_instructions(struct chip_8 c)
                         {
                             c.cpu.v_registers[0xF] = 1;
                         }
-                        c.cpu.v_registers[second_nibble] >>= 1;
                     }
                     break;
 
@@ -386,13 +437,12 @@ struct chip_8 handle_instructions(struct chip_8 c)
                     {
                         uint8_t value_in_vx = c.cpu.v_registers[second_nibble];
                         uint8_t value_in_vy = c.cpu.v_registers[third_nibble];
-                        if(value_in_vy > value_in_vx)
+                        c.cpu.v_registers[second_nibble] = value_in_vy - value_in_vx;
+                        if(value_in_vy >= value_in_vx)
                         {
                             c.cpu.v_registers[0xF] = 1;
                         }
                         else c.cpu.v_registers[0xF] = 0;
-
-                        c.cpu.v_registers[second_nibble] = value_in_vy - value_in_vx;
                     }
                     break;
 
@@ -400,7 +450,9 @@ struct chip_8 handle_instructions(struct chip_8 c)
                     printf("(Set VX to VX << VY)\n");
                     {
                         c.cpu.v_registers[second_nibble] = c.cpu.v_registers[third_nibble]; //VX = VY
-                        if((c.cpu.v_registers[second_nibble] & 0x80) == 0)
+                        uint16_t vx_before_modif = c.cpu.v_registers[second_nibble];
+                        c.cpu.v_registers[second_nibble] <<= 1;
+                        if((vx_before_modif & 0x80) == 0)
                         {
                             c.cpu.v_registers[0xF] = 0;
                         }
@@ -408,7 +460,6 @@ struct chip_8 handle_instructions(struct chip_8 c)
                         {
                             c.cpu.v_registers[0xF] = 1;
                         }
-                        c.cpu.v_registers[second_nibble] <<= 1;
                     }
                     break;
 
@@ -450,7 +501,11 @@ struct chip_8 handle_instructions(struct chip_8 c)
                 printf("Address : %04x\n", address);
                 uint8_t value_in_v0 = c.cpu.v_registers[0];
                 c.cpu.program_counter = /*START_ADDRESS + */address + value_in_v0;
-                c.stack = push_stack(c.stack, c.cpu.program_counter);
+                //c.stack = push_stack(c.stack, c.cpu.program_counter);
+
+                c.stack.addresses[c.cpu.stack_pointer] = c.cpu.program_counter;
+                c.cpu.stack_pointer += 1;
+
                 program_counter_edited = true;
             }
             break;
@@ -474,7 +529,7 @@ struct chip_8 handle_instructions(struct chip_8 c)
                 int x_pos = c.cpu.v_registers[register_x] & (DISPLAY_WIDTH - 1);
                 int y_pos = c.cpu.v_registers[register_y] & (DISPLAY_HEIGHT - 1);
 
-                printf("Valeur de xpos : %d et ypos : %d\n", x_pos, y_pos);
+                //printf("Valeur de xpos : %d et ypos : %d\n", x_pos, y_pos);
 
                 c.cpu.v_registers[0xF] = 0;
 
@@ -483,33 +538,43 @@ struct chip_8 handle_instructions(struct chip_8 c)
                 for(uint8_t y = 0; y < n; ++y)
                 {
                     uint8_t nth_byte = c.memory.memory_array[c.cpu.index_register + y];
-                    printf("Valeur de nth_byte : %u\n", nth_byte);
+                    //printf("Valeur de nth_byte : %u\n", nth_byte);
 
                     for(uint8_t x = 0; x < 8; ++x)
                     {
                         int pixel_x = (x_pos + x) % DISPLAY_WIDTH;
                         int pixel_y = (y_pos + y) % DISPLAY_HEIGHT;
 
+                        if(x_pos + x > DISPLAY_WIDTH)
+                        {
+                            break;
+                        }
+
                         if(nth_byte & (0x80 >> x))
                         {
-                            printf("Le bit %d vaut 1\n", x);
+                            //printf("Le bit %d vaut 1\n", x);
                             if(check_if_specific_pixel_on(c, pixel_x, pixel_y))
                             {
-                                printf("Le pixel (%d, %d) sur l'écran était en couleur\n", pixel_x, pixel_y);
+                                //printf("Le pixel (%d, %d) sur l'écran était en couleur\n", pixel_x, pixel_y);
                                 color_specific_pixel(c, pixel_x, pixel_y, 0xFF000000);
                                 c.cpu.v_registers[0xF] = 1;
                             }
                             else
                             {
-                                printf("Le pixel (%d, %d) sur l'écran n'était pas en couleur\n", pixel_x, pixel_y);
+                                //printf("Le pixel (%d, %d) sur l'écran n'était pas en couleur\n", pixel_x, pixel_y);
                                 color_specific_pixel(c, pixel_x, pixel_y, 0xFFFFFFFF);
-                                c.cpu.v_registers[0xF] = 0;
+                                c.cpu.v_registers[0xF] = 0; //TODO : nécessaire ?
                             }
                         }
                         else
                         {
-                            printf("Le bit %d vaut 0\n", x);
+                            //printf("Le bit %d vaut 0\n", x);
                         }
+                    }
+
+                    if(y_pos + y > DISPLAY_HEIGHT)
+                    {
+                        break;
                     }
                 }
             }
@@ -549,14 +614,31 @@ struct chip_8 handle_instructions(struct chip_8 c)
                 else if(fourth_nibble == 0xA)
                 {
                     printf("(Wait for user input)\n");
-                    if(!check_if_any_key_pressed(c))
+
+                    if((c.index_last_pressed_key = get_pressed_key(c)) == -1 && c.key_already_pressed == false)
                     {
                         c.cpu.program_counter -= 2;
                     }
-                    else
+                    else if((c.index_last_pressed_key = get_pressed_key(c)) != -1 && c.key_already_pressed == false)
                     {
-                        int index = get_pressed_key(c);
-                        c.cpu.v_registers[second_nibble] = index;
+                        c.key_already_pressed = true;
+                    }
+
+                    if(c.key_already_pressed)
+                    {
+                        if(get_pressed_key(c) != -1)
+                        {
+                            c.cpu.program_counter -= 2;
+                        }
+                        else
+                        {
+                            int index = c.index_last_pressed_key;
+                            c.cpu.v_registers[second_nibble] = index;
+                            c.index_last_pressed_key = -1;
+                            c.key_already_pressed = false;
+                            //c.is_key_pressed[index] = false;
+                            //c = reset_all_keys(c);
+                        }
                     }
                 }
             }
