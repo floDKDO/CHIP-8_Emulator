@@ -14,7 +14,7 @@ int main(int argc, char* argv[])
     CHK(Mix_OpenAudio(MIX_DEFAULT_FREQUENCY, MIX_DEFAULT_FORMAT, MIX_CHANNELS, 1024), Mix_GetError());
 
     Mix_Chunk* beep_sound;
-    NCHK(beep_sound = Mix_LoadWAV("beep_sound.wav"), Mix_GetError());
+    NCHK(beep_sound = Mix_LoadWAV("sounds/beep_sound.wav"), Mix_GetError());
 
     struct chip_8 c = create_chip_8();
 
@@ -47,8 +47,8 @@ int main(int argc, char* argv[])
     //c = load_program_in_memory(c, "test_roms/4-flags.ch8");
     //c = load_program_in_memory(c, "test_roms/5-quirks.ch8");
     //c = load_program_in_memory(c, "test_roms/6-keypad.ch8");
-    //c = load_program_in_memory(c, "test_roms/7-beep.ch8");
-    c = load_program_in_memory(c, "test_roms/TETRIS.ch8");
+    c = load_program_in_memory(c, "test_roms/7-beep.ch8");
+    //c = load_program_in_memory(c, "test_roms/TETRIS.ch8");
 
     #ifdef DEBUG
         dump_memory(c);
