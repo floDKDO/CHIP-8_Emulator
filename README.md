@@ -54,6 +54,4 @@ The "4" and "F" keys are pressed.
 
 
 ### Tetris
-<p align="center">
-  <video src="https://github.com/floDKDO/CHIP-8_Emulator/blob/main/showcase/playing_tetris.mp4" width="500" controls></video>
-</p>
+![](https://github.com/floDKDO/CHIP-8_Emulator/blob/main/showcase/playing_tetris.gif)
