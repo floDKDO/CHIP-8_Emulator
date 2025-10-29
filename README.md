@@ -1,6 +1,15 @@
 # CHIP-8-Emulator
 
-CHIP-8 emulator written in C using SDL2 for graphics. Many thanks to [Tobias](https://tobiasvl.github.io/blog/write-a-chip-8-emulator/) for his excellent guide.
+CHIP-8 emulator written in C using SDL2 for graphics and SDL2 Mixer for sounds. Many thanks to [Tobias](https://tobiasvl.github.io/blog/write-a-chip-8-emulator/) for his excellent guide.
+
+## Usage
+
+Compile and execute the executable. You can optionally choose between *Legacy* (0, by default) and *Modern* (1) mode depending on the desired quirks : 
+
+***./CHIP-8_Emulator [0=LEGACY,default ; 1=MODERN]***
+
+## Tetris
+![](https://github.com/floDKDO/CHIP-8_Emulator/blob/main/showcase/playing_tetris.gif)
 
 ## Timendus' tests
 
@@ -51,7 +60,3 @@ The "4" and "F" keys are pressed.
 <p align="center">
   <img src="https://github.com/floDKDO/CHIP-8_Emulator/blob/main/showcase/test6_3.png" alt="Test 6_3" width="500"/>
 </p>
-
-
-### Tetris
-![](https://github.com/floDKDO/CHIP-8_Emulator/blob/main/showcase/playing_tetris.gif)
