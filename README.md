@@ -4,9 +4,9 @@ CHIP-8 emulator written in C using SDL2 for graphics and SDL2 Mixer for sounds. 
 
 ## Usage
 
-Compile and execute the executable. You can optionally choose between *Legacy* (0, by default) and *Modern* (1) mode depending on the desired quirks : 
+Compile and execute the executable. You can optionally choose between *Legacy* (0, by default) and *Modern* (1) mode depending on the desired quirks and the desired ROM (0, Tetris by default) : 
 
-***./CHIP-8_Emulator [0=LEGACY,default ; 1=MODERN]***
+***./CHIP-8_Emulator -m [0=LEGACY,default ; 1=MODERN] -r [0=tetris,default ; [1, 7]=test_x]***
 
 ## Tetris
 ![](https://github.com/floDKDO/CHIP-8_Emulator/blob/main/showcase/playing_tetris.gif)
