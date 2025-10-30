@@ -1,6 +1,7 @@
 #include <time.h>
 #include <errno.h>
 #include <limits.h>
+#include <unistd.h>
 
 #include "chip_8.h"
 #include "SDL2/SDL_mixer.h"
@@ -18,37 +19,94 @@ int main(int argc, char* argv[])
 
     struct chip_8 c = create_chip_8();
 
-    if(argc != 2)
-    {
-        c.mode = LEGACY; //legacy behavior by default
-    }
-    else
-    {
-        errno = 0;
-        char* endptr;
-        long int mode = strtol(argv[1], &endptr, 10);
-        if((errno == EINVAL && mode == 0) || (errno == ERANGE && (mode == LONG_MIN || mode == LONG_MAX)))
+    bool mode_option, rom_option;
+    int mode, rom;
+    int opt;
+	while((opt = getopt(argc, argv, "m:r:")) != -1)
+	{
+        switch(opt)
         {
-            fprintf(stderr, "strtol: error!\n");
-            exit(EXIT_FAILURE);
-        }
-        if(mode != 0 && mode != 1)
-        {
-            fprintf(stderr, "Usage: ./CHIP-8 Emulator [0=LEGACY,default ; 1=MODERN]");
-            exit(EXIT_FAILURE);
-        }
-        c.mode = ((int)mode);
-    }
+            case 'm': //mode
+                mode_option = true;
+                if(strcmp(optarg, "0") != 0 && strcmp(optarg, "1") != 0)
+				{
+					printf("Usage: ./CHIP-8 Emulator -m [0=LEGACY,default ; 1=MODERN]\n");
+					exit(1);
+				}
+				mode = atoi(optarg);
+                break;
 
-    /*choose the rom by uncommenting the desired line*/
-    //c = load_program_in_memory(c, "test_roms/1-chip8-logo.ch8");
-    //c = load_program_in_memory(c, "test_roms/2-ibm-logo.ch8");
-    //c = load_program_in_memory(c, "test_roms/3-corax+.ch8");
-    //c = load_program_in_memory(c, "test_roms/4-flags.ch8");
-    //c = load_program_in_memory(c, "test_roms/5-quirks.ch8");
-    //c = load_program_in_memory(c, "test_roms/6-keypad.ch8");
-    c = load_program_in_memory(c, "test_roms/7-beep.ch8");
-    //c = load_program_in_memory(c, "test_roms/TETRIS.ch8");
+            case 'r': //rom
+                rom_option = true;
+                if(strcmp(optarg, "0") != 0 && strcmp(optarg, "1") != 0
+                && strcmp(optarg, "2") != 0 && strcmp(optarg, "3") != 0
+                && strcmp(optarg, "4") != 0 && strcmp(optarg, "5") != 0
+                && strcmp(optarg, "6") != 0 && strcmp(optarg, "7") != 0)
+				{
+					printf("Usage: ./CHIP-8 Emulator -r [0=tetris,default ; [1, 7]=test_x]\n");
+					exit(1);
+				}
+				rom = atoi(optarg);
+                break;
+
+            default:
+                break;
+        }
+	}
+
+	if(mode_option)
+	{
+        c.mode = ((int)mode);
+	}
+	else
+	{
+        c.mode = LEGACY;
+	}
+
+	if(rom_option)
+	{
+        switch(rom)
+        {
+            case 0:
+                c = load_program_in_memory(c, "test_roms/TETRIS.ch8");
+                break;
+
+            case 1:
+                c = load_program_in_memory(c, "test_roms/1-chip8-logo.ch8");
+                break;
+
+            case 2:
+                c = load_program_in_memory(c, "test_roms/2-ibm-logo.ch8");
+                break;
+
+            case 3:
+                c = load_program_in_memory(c, "test_roms/3-corax+.ch8");
+                break;
+
+            case 4:
+                c = load_program_in_memory(c, "test_roms/4-flags.ch8");
+                break;
+
+            case 5:
+                c = load_program_in_memory(c, "test_roms/5-quirks.ch8");
+                break;
+
+            case 6:
+                c = load_program_in_memory(c, "test_roms/6-keypad.ch8");
+                break;
+
+            case 7:
+                c = load_program_in_memory(c, "test_roms/7-beep.ch8");
+                break;
+
+            default:
+                break;
+        }
+	}
+	else
+	{
+        c = load_program_in_memory(c, "test_roms/TETRIS.ch8");
+	}
 
     #ifdef DEBUG
         dump_memory(c);
